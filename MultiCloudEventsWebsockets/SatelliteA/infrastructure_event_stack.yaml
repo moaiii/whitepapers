@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  EnvironmentType:
+    Description: The environment type
+    Type: String
+    AllowedValues:
+      - dev
+      - qa
+      - prod
+
+  CommandCentreAccountId:
+    Description: The AWS Account Id of the central command centre
+    Type: String
+
+Resources:
+  SateliteToCommandCentreEventBusRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SateliteToCommandCentreEventBusRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      MaxSessionDuration: 3600
+      Policies:
+        - PolicyName: TenantToCoreEventBusPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'events:*'
+                Resource: !Join
+                  - ''
+                  - - 'arn:aws:events:'
+                    - 'eu-west-1:'
+                    - !Ref CommandCentreAccountId
+                    - ':event-bus/ControlCentreEventBus'
+
+  InstanceStateChangeEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Instance State-change Notification
+      State: ENABLED
+      Targets:
+        - Arn: !Join
+            - ''
+            - - 'arn:aws:events:'
+              - 'eu-west-1:'
+              - !Ref CommandCentreAccountId
+              - ':event-bus'
+              - '/ControlCentreEventBus'
+          Id: Satelite_A_EC2_Event_Rule
+          RoleArn: !GetAtt SateliteToCommandCentreEventBusRole.Arn
